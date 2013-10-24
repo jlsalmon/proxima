@@ -6,6 +6,7 @@
 *.ear
 
 .project
+.classpath
 project.properties
 
 bin
