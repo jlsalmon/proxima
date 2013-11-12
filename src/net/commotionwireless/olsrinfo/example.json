@@ -1,0 +1,47 @@
+{
+    "data": [
+        {
+            "links": [
+                {
+                    "localIP": "192.168.1.51",
+                    "remoteIP": "192.168.1.50",
+                    "validityTime": 19131,
+                    "linkQuality": 0,
+                    "neighborLinkQuality": 0,
+                    "linkCost": 4194304
+                }
+            ]
+        },
+        {
+            "neighbors": [
+                {
+                    "ipv4Address": "192.168.1.50",
+                    "symmetric": false,
+                    "multiPointRelay": false,
+                    "multiPointRelaySelector": false,
+                    "willingness": 3,
+                    "twoHopNeighbors": [],
+                    "twoHopNeighborCount": 0
+                }
+            ]
+        },
+        {
+            "interfaces": [
+                {
+                    "name": "eth0",
+                    "state": "up",
+                    "mtu": 1472,
+                    "wireless": true,
+                    "ipv4Address": "192.168.1.51",
+                    "netmask": "255.255.255.0",
+                    "broadcast": "192.168.1.255"
+                },
+                {
+                    "name": "wlan0",
+                    "state": "down"
+                }
+            ]
+        }
+    ],
+    "systemTime": 1383563345
+}
