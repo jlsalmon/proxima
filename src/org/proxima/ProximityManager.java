@@ -21,6 +21,8 @@ package org.proxima;
 
 import java.util.ArrayList;
 
+import org.proxima.Channel.ChannelListener;
+
 import android.content.Context;
 import android.util.Log;
 
@@ -61,11 +63,12 @@ public class ProximityManager
      * Returns a Channel instance that is used for future requests
      *
      * @param context
+     * @param channelListener
      * @return
      */
-    public Channel initialize(Context context)
+    public Channel initialize(Context context, ChannelListener channelListener)
     {
-        Channel channel = new Channel(context);
+        Channel channel = new Channel(context, channelListener);
         channel.connect();
         return channel;
     }

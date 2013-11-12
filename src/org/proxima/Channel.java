@@ -45,6 +45,7 @@ public class Channel
     private static final String TAG = "Channel";
 
     private final Context mContext;
+    private final ChannelListener mChannelListener;
     private Messenger mService = null;
     private final Messenger mMessenger;
 
@@ -59,9 +60,10 @@ public class Channel
      *
      * @param context
      */
-    public Channel(Context context)
+    public Channel(Context context, ChannelListener channelListener)
     {
         mContext = context;
+        mChannelListener = channelListener;
         mMessenger = new Messenger(new IncomingHandler());
     }
 
@@ -168,6 +170,7 @@ public class Channel
                 // In this case the service has crashed before we could even do
                 // anything with it
                 Log.e(TAG, e.toString());
+                mChannelListener.onChannelDisconnected();
             }
         }
 
@@ -181,6 +184,7 @@ public class Channel
             // This is called when the connection with the service has been
             // unexpectedly disconnected - process crashed.
             mService = null;
+            mChannelListener.onChannelDisconnected();
             Log.d(TAG, "Service disconnected");
         }
     };
@@ -229,4 +233,13 @@ public class Channel
         }
     }
 
+    /**
+     *
+     * ChannelListener
+     *
+     */
+    public interface ChannelListener
+    {
+        public void onChannelDisconnected();
+    }
 }
