@@ -13,7 +13,6 @@ import java.util.Collection;
  */
 public class OlsrDataDump {
 	public Config config;
-	public Collection data;
 	public Collection<Gateway> gateways;
 	public Collection<HNA> hna;
 	public Collection<Interface> interfaces;
