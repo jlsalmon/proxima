@@ -24,9 +24,7 @@ import java.util.Collection;
 
 import net.commotionwireless.olsrinfo.datatypes.Neighbor;
 import android.app.Service;
-import android.content.Context;
 import android.content.Intent;
-import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -81,7 +79,7 @@ public class ProximityService extends Service
 
 //                // TODO refactor this out
 
-                disableWifi();
+                helper.disableWifi();
 
                 String path = getFilesDir().getParent();
 
@@ -159,50 +157,6 @@ public class ProximityService extends Service
             }
         };
         thread.start();
-
-    }
-
-    // TODO refactor this out
-    // disable the default wifi interface for this device
-    /**
-     *
-     */
-    private void disableWifi()
-    {
-        WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
-        wifiManager.setWifiEnabled(false);
-        Log.d(TAG, "Wifi disabled!");
-        // Waiting for interface-shutdown
-        try
-        {
-            Thread.sleep(1000);
-        }
-        catch (InterruptedException e)
-        {
-            // nothing
-        }
-
-    }
-
-    // TODO refactor this out
-    // enable the default wifi interface for this device
-    /**
-     *
-     */
-    private void enableWifi()
-    {
-        WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
-        // Waiting for interface-restart
-        wifiManager.setWifiEnabled(true);
-        try
-        {
-            Thread.sleep(5000);
-        }
-        catch (InterruptedException e)
-        {
-            // nothing
-        }
-        Log.d(TAG, "Wifi started!");
 
     }
 

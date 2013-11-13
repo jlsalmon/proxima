@@ -23,6 +23,8 @@ import java.util.Collection;
 
 import net.commotionwireless.olsrinfo.datatypes.Neighbor;
 import android.content.Context;
+import android.net.wifi.WifiManager;
+import android.util.Log;
 
 /**
  *
@@ -31,6 +33,9 @@ import android.content.Context;
  */
 public class ProximityServiceHelper
 {
+    private static final String TAG = "ProximityServiceHelper";
+
+    private final WifiManager mWifiManager;
     private final OlsrHelper mOlsrHelper;
 
     /**
@@ -39,6 +44,8 @@ public class ProximityServiceHelper
      */
     public ProximityServiceHelper(Context context)
     {
+        mWifiManager = (WifiManager) context
+                .getSystemService(Context.WIFI_SERVICE);
         mOlsrHelper = new OlsrHelper(context);
     }
 
@@ -67,5 +74,43 @@ public class ProximityServiceHelper
     public Collection<Neighbor> getPeers()
     {
         return mOlsrHelper.getPeers();
+    }
+
+    /**
+     * Disable the default wifi interface for this device
+     */
+    public void disableWifi()
+    {
+        mWifiManager.setWifiEnabled(false);
+        Log.d(TAG, "Wifi disabled!");
+        // Waiting for interface-shutdown
+        try
+        {
+            Thread.sleep(1000);
+        }
+        catch (InterruptedException e)
+        {
+            // nothing
+        }
+
+    }
+
+    /**
+     * Enable the default wifi interface for this device
+     */
+    public void enableWifi()
+    {
+        // Waiting for interface-restart
+        mWifiManager.setWifiEnabled(true);
+        try
+        {
+            Thread.sleep(5000);
+        }
+        catch (InterruptedException e)
+        {
+            // nothing
+        }
+        Log.d(TAG, "Wifi started!");
+
     }
 }
