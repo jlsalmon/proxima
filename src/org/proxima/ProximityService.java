@@ -44,7 +44,6 @@ public class ProximityService extends Service
 {
     private static final String TAG = "ProximityService";
 
-    public static final int MSG_TEST = 1;
     public static final int MSG_REGISTER_CLIENT = 2;
     public static final int MSG_UNREGISTER_CLIENT = 3;
     public static final int MSG_GET_PEERS = 4;

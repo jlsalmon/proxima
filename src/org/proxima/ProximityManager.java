@@ -49,12 +49,22 @@ public class ProximityManager
     public static final int REQUEST_PEERS = 0;
     public static final int RESPONSE_PEERS = 1;
 
+    private static final ProximityManager mSingleton = new ProximityManager();
+
+    /**
+     * Intentionally made private to keep this class a singleton
+     */
+    private ProximityManager()
+    {
+    }
+
     /**
      *
+     * @return
      */
-    public ProximityManager()
+    public static ProximityManager getInstance()
     {
-
+        return mSingleton;
     }
 
     /**
