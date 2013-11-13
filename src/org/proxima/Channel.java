@@ -19,6 +19,7 @@
 
 package org.proxima;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 
 import org.proxima.ProximityManager.PeerListListener;
@@ -54,7 +55,7 @@ public class Channel
     /*
      * TODO: allow multiple callback listeners
      */
-    private PeerListListener listener;
+    private PeerListListener mPeerListListener;
 
     /**
      *
@@ -64,7 +65,7 @@ public class Channel
     {
         mContext = context;
         mChannelListener = channelListener;
-        mMessenger = new Messenger(new IncomingHandler());
+        mMessenger = new Messenger(new IncomingHandler(this));
     }
 
     /**
@@ -78,7 +79,7 @@ public class Channel
     /**
      *
      * @param what
-     * @param listener
+     * @param mPeerListListener
      */
     public void sendMessage(int what, PeerListListener listener)
     {
@@ -86,7 +87,7 @@ public class Channel
         {
             if (mService != null)
             {
-                this.listener = listener;
+                this.mPeerListListener = listener;
 
                 try
                 {
@@ -112,8 +113,25 @@ public class Channel
      * IncomingHandler
      *
      */
-    class IncomingHandler extends Handler
+    static class IncomingHandler extends Handler
     {
+        /**
+         * Why the WeakReference? See
+         * <a>http://stackoverflow.com/questions/11407943
+         * /this-handler-class-should-
+         * be-static-or-leaks-might-occur-incominghandler</a>
+         */
+        private final WeakReference<Channel> mChannel;
+
+        /**
+         *
+         * @param channel
+         */
+        public IncomingHandler(Channel channel)
+        {
+            mChannel = new WeakReference<Channel>(channel);
+        }
+
         /**
          *
          * @see android.os.Handler#handleMessage(android.os.Message)
@@ -128,7 +146,8 @@ public class Channel
                     Bundle bundle = message.getData();
                     ArrayList<String> peers = bundle
                             .getStringArrayList("peerList");
-                    listener.onPeerListAvailable(peers);
+                    mChannel.get().getPeerListListener()
+                            .onPeerListAvailable(peers);
                     break;
                 default:
                     super.handleMessage(message);
@@ -241,5 +260,14 @@ public class Channel
     public interface ChannelListener
     {
         public void onChannelDisconnected();
+    }
+
+    /**
+     *
+     * @return
+     */
+    public PeerListListener getPeerListListener()
+    {
+        return mPeerListListener;
     }
 }

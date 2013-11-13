@@ -19,6 +19,7 @@
 
 package org.proxima;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
 
@@ -33,7 +34,6 @@ import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
 import android.util.Log;
-import android.widget.Toast;
 
 /**
  *
@@ -53,7 +53,8 @@ public class ProximityService extends Service
     private final ArrayList<Messenger> mClients = new ArrayList<Messenger>();
 
     // Target we publish for clients to send messages to IncomingHandler.
-    private final Messenger mMessenger = new Messenger(new IncomingHandler());
+    private final Messenger mMessenger = new Messenger(
+            new IncomingHandler(this));
 
     private ProximityServiceHelper helper;
 
@@ -77,7 +78,7 @@ public class ProximityService extends Service
             {
                 NativeTools.unpackResources(getApplicationContext());
 
-//                // TODO refactor this out
+                // // TODO refactor this out
 
                 helper.disableWifi();
 
@@ -85,8 +86,9 @@ public class ProximityService extends Service
 
                 if (Build.MODEL.equalsIgnoreCase("GT-I9505"))
                 {
-                    NativeTools.runRootCommandGetOutput(getApplicationContext(),
-                            path + "/bin/tether start");
+                    NativeTools
+                            .runRootCommandGetOutput(getApplicationContext(),
+                                    path + "/bin/tether start");
                 }
                 else
                 {
@@ -100,45 +102,52 @@ public class ProximityService extends Service
                         iface = "eth0";
                         ip = "192.168.2.101";
                         NativeTools.runRootCommandGetOutput(
-                                getApplicationContext(), path + "/bin/wifi load");
+                                getApplicationContext(), path
+                                        + "/bin/wifi load");
                     }
                     else
                     {
                         iface = "eth0";
                         ip = "192.168.2.102";
                         NativeTools.runRootCommandGetOutput(
-                                getApplicationContext(), path + "/bin/wifi load");
+                                getApplicationContext(), path
+                                        + "/bin/wifi load");
                     }
 
-                    NativeTools.runRootCommandGetOutput(getApplicationContext(),
-                            path + "/bin/ifconfig " + iface + " " + ip
+                    NativeTools.runRootCommandGetOutput(
+                            getApplicationContext(), path + "/bin/ifconfig "
+                                    + iface + " " + ip
                                     + " netmask 255.255.255.0");
-                    NativeTools.runRootCommandGetOutput(getApplicationContext(),
-                            path + "/bin/ifconfig " + iface + " up");
+                    NativeTools.runRootCommandGetOutput(
+                            getApplicationContext(), path + "/bin/ifconfig "
+                                    + iface + " up");
 
-                    NativeTools.runRootCommandGetOutput(getApplicationContext(),
-                            path + "/bin/iwconfig " + iface + " mode ad-hoc");
+                    NativeTools.runRootCommandGetOutput(
+                            getApplicationContext(), path + "/bin/iwconfig "
+                                    + iface + " mode ad-hoc");
 
                     // NativeTools.runRootCommandGetOutput(getApplicationContext(),
                     // path + "/bin/ifconfig " + iface + " down");
 
+                    NativeTools.runRootCommandGetOutput(
+                            getApplicationContext(), path + "/bin/iwconfig "
+                                    + iface + " essid wildfire2");
+                    NativeTools.runRootCommandGetOutput(
+                            getApplicationContext(), path + "/bin/iwconfig "
+                                    + iface + " channel 1");
+                    NativeTools.runRootCommandGetOutput(
+                            getApplicationContext(), path + "/bin/iwconfig "
+                                    + iface + " commit");
+                    // NativeTools.runRootCommandGetOutput(getApplicationContext(),
+                    // path + "/bin/ifconfig " + iface + " " + ip
+                    // + " netmask 255.255.255.0");
 
-                    NativeTools.runRootCommandGetOutput(getApplicationContext(),
-                            path + "/bin/iwconfig " + iface + " essid wildfire2");
-                    NativeTools.runRootCommandGetOutput(getApplicationContext(),
-                            path + "/bin/iwconfig " + iface + " channel 1");
-                    NativeTools.runRootCommandGetOutput(getApplicationContext(),
-                            path + "/bin/iwconfig " + iface + " commit");
-//                    NativeTools.runRootCommandGetOutput(getApplicationContext(),
-//                            path + "/bin/ifconfig " + iface + " " + ip
-//                                    + " netmask 255.255.255.0");
-
-                    NativeTools.runRootCommandGetOutput(getApplicationContext(),
+                    NativeTools.runRootCommandGetOutput(
+                            getApplicationContext(),
                             "echo 1 > /proc/sys/net/ipv4/ip_forward");
 
                     // TODO refactor this out
                 }
-
 
                 try
                 {
@@ -157,7 +166,19 @@ public class ProximityService extends Service
             }
         };
         thread.start();
+    }
 
+    /**
+     *
+     * @see android.app.Service#onDestroy()
+     */
+    @Override
+    public void onDestroy()
+    {
+        super.onDestroy();
+        NativeTools.runRootCommandGetOutput(getApplicationContext(),
+                getFilesDir().getParent() + "/bin/tether stop");
+        Log.d(TAG, "Service stopped");
     }
 
     /**
@@ -185,32 +206,40 @@ public class ProximityService extends Service
      *
      * IncomingHandler
      *
+     * Handler of incoming messages from clients.
      */
-    class IncomingHandler extends Handler
-    { // Handler of incoming messages from clients.
+    static class IncomingHandler extends Handler
+    {
+        private final WeakReference<ProximityService> mService;
+
+        /**
+         *
+         * @param channel
+         */
+        public IncomingHandler(ProximityService service)
+        {
+            mService = new WeakReference<ProximityService>(service);
+        }
+
         @Override
         public void handleMessage(Message msg)
         {
             Log.d(TAG, "Received message");
+            ArrayList<Messenger> clients = mService.get().getClients();
 
             switch (msg.what)
             {
                 case MSG_REGISTER_CLIENT:
                     Log.d(TAG, "Received message MSG_REGISTER_CLIENT");
-                    mClients.add(msg.replyTo);
+                    clients.add(msg.replyTo);
                     break;
                 case MSG_UNREGISTER_CLIENT:
                     Log.d(TAG, "Received message MSG_UNREGISTER_CLIENT");
-                    mClients.remove(msg.replyTo);
-                    break;
-                case MSG_TEST:
-                    Log.d(TAG, "Received message MSG_TEST");
-                    Toast.makeText(getApplicationContext(),
-                            "Test message received", Toast.LENGTH_LONG).show();
+                    clients.remove(msg.replyTo);
                     break;
                 case ProximityManager.REQUEST_PEERS:
                     Log.d(TAG, "Received message REQUEST_PEERS");
-                    getPeers();
+                    mService.get().getPeers();
                     break;
                 default:
                     super.handleMessage(msg);
@@ -227,11 +256,6 @@ public class ProximityService extends Service
         {
             try
             {
-                // Send data
-                // ArrayList<String> peers = new ArrayList<String>();
-                // peers.add("192.168.1.x");
-                // peers.add("192.168.1.x");
-
                 Collection<Neighbor> neighbors = helper.getPeers();
                 ArrayList<String> peerList = new ArrayList<String>();
 
@@ -260,15 +284,10 @@ public class ProximityService extends Service
 
     /**
      *
-     * @see android.app.Service#onDestroy()
+     * @return
      */
-    @Override
-    public void onDestroy()
+    protected ArrayList<Messenger> getClients()
     {
-        super.onDestroy();
-        NativeTools.runRootCommandGetOutput(getApplicationContext(),
-                getFilesDir().getParent() + "/bin/tether stop");
-        Log.d(TAG, "Service stopped");
+        return mClients;
     }
-
 }
