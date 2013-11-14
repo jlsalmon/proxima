@@ -49,11 +49,10 @@ public class ProximityService extends Service
     public static final int MSG_GET_PEERS = 4;
 
     // Keeps track of all current registered clients.
-    private final ArrayList<Messenger> mClients = new ArrayList<Messenger>();
+    private ArrayList<Messenger> mClients;
 
     // Target we publish for clients to send messages to IncomingHandler.
-    private final Messenger mMessenger = new Messenger(
-            new IncomingHandler(this));
+    private Messenger mMessenger;
 
     private ProximityServiceHelper helper;
 
@@ -69,6 +68,8 @@ public class ProximityService extends Service
         android.os.Debug.waitForDebugger();
 
         helper = new ProximityServiceHelper(this);
+        mClients = new ArrayList<Messenger>();
+        mMessenger = new Messenger(new IncomingHandler(this));
 
         Thread thread = new Thread()
         {

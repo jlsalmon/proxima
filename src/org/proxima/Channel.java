@@ -146,6 +146,10 @@ public class Channel
                     Bundle bundle = message.getData();
                     ArrayList<String> peers = bundle
                             .getStringArrayList("peerList");
+
+                    /**
+                     * Call the client listener method
+                     */
                     mChannel.get().getPeerListListener()
                             .onPeerListAvailable(peers);
                     break;
@@ -189,6 +193,7 @@ public class Channel
                 // In this case the service has crashed before we could even do
                 // anything with it
                 Log.e(TAG, e.toString());
+                // Notify the client application of the error
                 mChannelListener.onChannelDisconnected();
             }
         }
@@ -203,6 +208,7 @@ public class Channel
             // This is called when the connection with the service has been
             // unexpectedly disconnected - process crashed.
             mService = null;
+            // Notify the client application of the error
             mChannelListener.onChannelDisconnected();
             Log.d(TAG, "Service disconnected");
         }
@@ -254,20 +260,20 @@ public class Channel
 
     /**
      *
+     * @return
+     */
+    public PeerListListener getPeerListListener()
+    {
+        return mPeerListListener;
+    }
+
+    /**
+     *
      * ChannelListener
      *
      */
     public interface ChannelListener
     {
         public void onChannelDisconnected();
-    }
-
-    /**
-     *
-     * @return
-     */
-    public PeerListListener getPeerListListener()
-    {
-        return mPeerListListener;
     }
 }

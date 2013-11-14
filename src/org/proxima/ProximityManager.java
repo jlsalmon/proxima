@@ -98,8 +98,6 @@ public class ProximityManager
      *
      * ActionListener
      *
-     * @author Justin Lewis Salmon <mccrustin@gmail.com>
-     *
      */
     public interface ActionListener
     {
@@ -118,8 +116,6 @@ public class ProximityManager
     /**
      *
      * PeerListListener
-     *
-     * @author Justin Lewis Salmon <mccrustin@gmail.com>
      *
      */
     public interface PeerListListener
