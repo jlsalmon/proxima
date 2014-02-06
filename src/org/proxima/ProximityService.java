@@ -19,16 +19,13 @@
 
 package org.proxima;
 
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
 
 import net.commotionwireless.olsrinfo.datatypes.Neighbor;
 import android.app.Service;
 import android.content.Intent;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.Messenger;
@@ -39,24 +36,35 @@ import android.util.Log;
  *
  * ProximityService
  *
+ * The main background service that responds to client requests for neighbor
+ * discovery and retrieval (via Channel object).
+ *
+ * TODO: This service should be a state machine.
  */
 public class ProximityService extends Service
 {
+    /**
+     * The ID tag of this class for use with logging messages
+     */
     private static final String TAG = "ProximityService";
 
-    public static final int MSG_REGISTER_CLIENT = 2;
-    public static final int MSG_UNREGISTER_CLIENT = 3;
-    public static final int MSG_GET_PEERS = 4;
-
-    // Keeps track of all current registered clients.
-    private ArrayList<Messenger> mClients;
-
-    // Target we publish for clients to send messages to IncomingHandler.
+    /**
+     * Target we publish for clients to send messages to ChannelHandler.
+     */
     private Messenger mMessenger;
 
-    private ProximityServiceHelper helper;
+    /**
+     * Simple helper object to simplify this class
+     */
+    private ProximityServiceHelper mHelper;
 
     /**
+     * Keep track of whether neighbor discovery has been started.
+     */
+    private boolean mNeighborDiscoveryStarted;
+
+    /**
+     * Called when the service is first created
      *
      * @see android.app.Service#onCreate()
      */
@@ -65,110 +73,14 @@ public class ProximityService extends Service
     {
         super.onCreate();
         Log.d(TAG, "Service started");
-        android.os.Debug.waitForDebugger();
 
-        helper = new ProximityServiceHelper(this);
-        mClients = new ArrayList<Messenger>();
-        mMessenger = new Messenger(new IncomingHandler(this));
-
-        Thread thread = new Thread()
-        {
-            @Override
-            public void run()
-            {
-                NativeTools.unpackResources(getApplicationContext());
-
-                // // TODO refactor this out
-
-                helper.disableWifi();
-
-                String path = getFilesDir().getParent();
-
-                if (Build.MODEL.equalsIgnoreCase("GT-I9505"))
-                {
-                    NativeTools
-                            .runRootCommandGetOutput(getApplicationContext(),
-                                    path + "/bin/tether start");
-                }
-                else
-                {
-                    String iface;
-                    String ip;
-
-                    Log.d(TAG, Build.MODEL + " ------------------------------");
-
-                    if (Build.MODEL.equalsIgnoreCase("GT-P7510"))
-                    {
-                        iface = "eth0";
-                        ip = "192.168.2.101";
-                        NativeTools.runRootCommandGetOutput(
-                                getApplicationContext(), path
-                                        + "/bin/wifi load");
-                    }
-                    else
-                    {
-                        iface = "eth0";
-                        ip = "192.168.2.102";
-                        NativeTools.runRootCommandGetOutput(
-                                getApplicationContext(), path
-                                        + "/bin/wifi load");
-                    }
-
-                    NativeTools.runRootCommandGetOutput(
-                            getApplicationContext(), path + "/bin/ifconfig "
-                                    + iface + " " + ip
-                                    + " netmask 255.255.255.0");
-                    NativeTools.runRootCommandGetOutput(
-                            getApplicationContext(), path + "/bin/ifconfig "
-                                    + iface + " up");
-
-                    NativeTools.runRootCommandGetOutput(
-                            getApplicationContext(), path + "/bin/iwconfig "
-                                    + iface + " mode ad-hoc");
-
-                    // NativeTools.runRootCommandGetOutput(getApplicationContext(),
-                    // path + "/bin/ifconfig " + iface + " down");
-
-                    NativeTools.runRootCommandGetOutput(
-                            getApplicationContext(), path + "/bin/iwconfig "
-                                    + iface + " essid wildfire2");
-                    NativeTools.runRootCommandGetOutput(
-                            getApplicationContext(), path + "/bin/iwconfig "
-                                    + iface + " channel 1");
-                    NativeTools.runRootCommandGetOutput(
-                            getApplicationContext(), path + "/bin/iwconfig "
-                                    + iface + " commit");
-                    // NativeTools.runRootCommandGetOutput(getApplicationContext(),
-                    // path + "/bin/ifconfig " + iface + " " + ip
-                    // + " netmask 255.255.255.0");
-
-                    NativeTools.runRootCommandGetOutput(
-                            getApplicationContext(),
-                            "echo 1 > /proc/sys/net/ipv4/ip_forward");
-
-                    // TODO refactor this out
-                }
-
-                try
-                {
-                    Thread.sleep(3000);
-                }
-                catch (InterruptedException e)
-                {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                }
-
-                if (!helper.startRoutingProtocol())
-                {
-                    Log.e(TAG, "Could not start routing protocol");
-                }
-            }
-        };
-        thread.start();
+        mHelper = new ProximityServiceHelper(this);
+        mMessenger = new Messenger(new ProximityServiceHandler(this));
+        mNeighborDiscoveryStarted = false;
     }
 
     /**
+     * Called when the service is finishing or being destroyed by the system
      *
      * @see android.app.Service#onDestroy()
      */
@@ -176,12 +88,11 @@ public class ProximityService extends Service
     public void onDestroy()
     {
         super.onDestroy();
-        NativeTools.runRootCommandGetOutput(getApplicationContext(),
-                getFilesDir().getParent() + "/bin/tether stop");
         Log.d(TAG, "Service stopped");
     }
 
     /**
+     * Called by the system every time a client explicitly starts the service.
      *
      * @see android.app.Service#onStartCommand(android.content.Intent, int, int)
      */
@@ -193,101 +104,139 @@ public class ProximityService extends Service
     }
 
     /**
+     * Return the communication channel to this service.
      *
      * @see android.app.Service#onBind(android.content.Intent)
      */
     @Override
-    public IBinder onBind(Intent arg0)
+    public IBinder onBind(Intent intent)
     {
+        Log.d(TAG, "onBind()");
         return mMessenger.getBinder();
     }
 
     /**
+     * Begin the neighbor discovery process. This involves unpacking the
+     * necessary binary files and config files, configuring the wireless
+     * interface (setting ad-hoc mode) and starting the routing protocol daemon.
      *
-     * IncomingHandler
+     * If the neighbor discovery process started correctly (i.e. we performed
+     * the aforementioned steps successfully) then we respond to the client with
+     * a DISCOVER_NEIGHBORS_SUCCEEDED message, and additionally broadcast a
+     * PROXIMITY_NEIGHBORS_CHANGED_ACTION intent. Otherwise, we respond to the
+     * client with a DISCOVER_NEIGHBORS_FAILED message.
      *
-     * Handler of incoming messages from clients.
+     * @param message the DISCOVER_NEIGHBORS message received from the client
      */
-    static class IncomingHandler extends Handler
+    protected void discoverNeighbors(Message message)
     {
-        private final WeakReference<ProximityService> mService;
+        // Neighbor discovery should only be done once
+        if (mNeighborDiscoveryStarted) return;
 
-        /**
-         *
-         * @param channel
-         */
-        public IncomingHandler(ProximityService service)
+        // Unpack the binaries and config files
+        NativeTools.unpackResources(getApplicationContext());
+
+        // Configure the wireless interface
+        if (!mHelper.isInterfaceConfigured())
         {
-            mService = new WeakReference<ProximityService>(service);
+            mHelper.configureWirelessInterface();
         }
 
-        @Override
-        public void handleMessage(Message msg)
+        // We want to keep the routing protocol running, if possible
+        if (mHelper.isRoutingProtocolStarted())
         {
-            Log.d(TAG, "Received message");
-            ArrayList<Messenger> clients = mService.get().getClients();
+            replyToMessage(message,
+                    ProximityManager.DISCOVER_NEIGHBORS_SUCCEEDED, null);
 
-            switch (msg.what)
+            // Broadcast that the neighbors have changed
+            sendNeighboursChangedBroadcast();
+        }
+        else
+        {
+            // Try to start the routing protocol
+            if (!mHelper.startRoutingProtocol())
             {
-                case MSG_REGISTER_CLIENT:
-                    Log.d(TAG, "Received message MSG_REGISTER_CLIENT");
-                    clients.add(msg.replyTo);
-                    break;
-                case MSG_UNREGISTER_CLIENT:
-                    Log.d(TAG, "Received message MSG_UNREGISTER_CLIENT");
-                    clients.remove(msg.replyTo);
-                    break;
-                case ProximityManager.REQUEST_PEERS:
-                    Log.d(TAG, "Received message REQUEST_PEERS");
-                    mService.get().getPeers();
-                    break;
-                default:
-                    super.handleMessage(msg);
+                Log.e(TAG, "Could not start routing protocol");
+                replyToMessage(message,
+                        ProximityManager.DISCOVER_NEIGHBORS_FAILED, null);
             }
+            else
+            {
+                Log.e(TAG, "Successfully started routing protocol");
+                replyToMessage(message,
+                        ProximityManager.DISCOVER_NEIGHBORS_SUCCEEDED, null);
+
+                // Broadcast that the neighbors have changed
+                sendNeighboursChangedBroadcast();
+            }
+        }
+
+    }
+
+    /**
+     * Obtain a list of neighbors from the routing protocol daemon interface and
+     * return it back to the client.
+     *
+     * @param message the REQUEST_NEIGHBORS message received from the client
+     */
+    protected void requestNeighbors(Message message)
+    {
+        Collection<Neighbor> neighbors = mHelper.requestNeighbors();
+        ArrayList<String> neighborList = new ArrayList<String>();
+
+        for (Neighbor neighbor : neighbors)
+        {
+            neighborList.add(neighbor.ipv4Address);
+        }
+
+        Bundle data = new Bundle();
+        data.putStringArrayList(ProximityManager.EXTRA_NEIGHBOR_LIST,
+                neighborList);
+
+        Log.d(TAG, "Sending message RESPONSE_NEIGHBORS");
+        replyToMessage(message, ProximityManager.RESPONSE_NEIGHBORS, data);
+    }
+
+    /**
+     * Reply to a message received from a client. There will be a callback
+     * listener in the arg2 parameter, which is provided by the client, so we
+     * pass this back.
+     *
+     * @param message the client message
+     * @param what the message subject
+     * @param data optional data bundle to deliver to the client
+     */
+    private void replyToMessage(Message message, int what, Bundle data)
+    {
+        if (message.replyTo == null) return;
+
+        Message dstMsg = Message.obtain();
+        dstMsg.what = what;
+
+        // The callback listener is in arg2
+        dstMsg.arg2 = message.arg2;
+
+        // Maybe set some data
+        if (data != null) dstMsg.setData(data);
+
+        try
+        {
+            dstMsg.replyTo = mMessenger;
+            message.replyTo.send(dstMsg);
+        }
+        catch (RemoteException e)
+        {
+            Log.e(TAG, "TODO: handle RemoteException" + e);
         }
     }
 
     /**
-     *
+     * Notify that the neighbors have changed (or are at least requestable)
      */
-    private void getPeers()
+    public void sendNeighboursChangedBroadcast()
     {
-        for (int i = mClients.size() - 1; i >= 0; i--)
-        {
-            try
-            {
-                Collection<Neighbor> neighbors = helper.getPeers();
-                ArrayList<String> peerList = new ArrayList<String>();
-
-                for (Neighbor neighbor : neighbors)
-                {
-                    peerList.add(neighbor.ipv4Address);
-                }
-
-                Bundle bundle = new Bundle();
-                bundle.putStringArrayList("peerList", peerList);
-                Message message = Message.obtain(null,
-                        ProximityManager.RESPONSE_PEERS);
-                message.setData(bundle);
-                mClients.get(i).send(message);
-
-            }
-            catch (RemoteException e)
-            {
-                // The client is dead. Remove it from the list; we are going
-                // through the list from back to front so this is safe to do
-                // inside the loop.
-                mClients.remove(i);
-            }
-        }
-    }
-
-    /**
-     *
-     * @return
-     */
-    protected ArrayList<Messenger> getClients()
-    {
-        return mClients;
+        Intent intent = new Intent();
+        intent.setAction(ProximityManager.PROXIMITY_NEIGHBORS_CHANGED_ACTION);
+        sendBroadcast(intent);
     }
 }

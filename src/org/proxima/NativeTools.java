@@ -28,44 +28,53 @@ public class NativeTools
 {
     private static final String TAG = "NativeTools";
 
-    private static final String FILES_DIR = "/data/data/org.proxima";
+    // private static final String FILES_DIR = "/data/data/org.proxima";
 
     public static void unpackResources(Context context)
     {
         String path = context.getFilesDir().getParent();
 
-        // TODO: Only copy files if they don't exist or we have a newer version
-        copyFile(context, path + "/bin/iwconfig", R.raw.iwconfig);
-        copyFile(context, path + "/bin/ifconfig", R.raw.ifconfig_old);
-        copyFile(context, path + "/bin/iptables", R.raw.iptables);
-        copyFile(context, path + "/bin/wifi", R.raw.wifi);
-        copyFile(context, path + "/bin/tcpdump", R.raw.tcpdump);
-        copyFile(context, path + "/bin/dnsmasq", R.raw.dnsmasq);
+        if (copyFile(context, path + "/bin/iwconfig", R.raw.iwconfig))
+            chmod(context, path + "/bin/iwconfig", "0755");
 
-        copyFile(context, path + "/bin/tether", R.raw.tether);
-        copyFile(context, path + "/conf/tether.edify", R.raw.tether_edify);
+        if (copyFile(context, path + "/bin/ifconfig", R.raw.ifconfig_old))
+            chmod(context, path + "/bin/ifconfig", "0755");
 
-        copyFile(context, path + "/bin/olsrd", R.raw.olsrd);
-        copyFile(context, path + "/conf/olsrd.conf", R.raw.olsrd_conf_in);
-        copyFile(context, path + "/bin/olsrd_txtinfo.so.0.1",
-                R.raw.olsrd_txtinfo_so_0_1);
-        copyFile(context, path + "/bin/olsrd_jsoninfo.so.0.0",
-                R.raw.olsrd_jsoninfo_so_0_0);
+        if (copyFile(context, path + "/bin/iptables", R.raw.iptables))
+            chmod(context, path + "/bin/iptables", "0755");
 
-        chmod(context, path + "/bin/iwconfig", "0755");
-        chmod(context, path + "/bin/ifconfig", "0755");
-        chmod(context, path + "/bin/iptables", "0755");
-        chmod(context, path + "/bin/wifi", "0755");
-        chmod(context, path + "/bin/tcpdump", "0755");
-        chmod(context, path + "/bin/dnsmasq", "0755");
+        if (copyFile(context, path + "/bin/wifi", R.raw.wifi))
+            chmod(context, path + "/bin/wifi", "0755");
 
-        chmod(context, path + "/bin/tether", "0755");
-        chmod(context, path + "/conf/tether.edify", "0755");
+        if (copyFile(context, path + "/bin/tcpdump", R.raw.tcpdump))
+            chmod(context, path + "/bin/tcpdump", "0755");
 
-        chmod(context, path + "/bin/olsrd", "0755");
-        chmod(context, path + "/conf/olsrd.conf", "0644");
-        chmod(context, path + "/bin/olsrd_txtinfo.so.0.1", "0755");
-        chmod(context, path + "/bin/olsrd_jsoninfo.so.0.0", "0755");
+        if (copyFile(context, path + "/bin/dnsmasq", R.raw.dnsmasq))
+            chmod(context, path + "/bin/dnsmasq", "0755");
+
+        if (copyFile(context, path + "/bin/tether", R.raw.tether))
+            chmod(context, path + "/bin/tether", "0755");
+
+        if (copyFile(context, path + "/conf/tether.edify", R.raw.tether_edify))
+            chmod(context, path + "/conf/tether.edify", "0755");
+
+        if (copyFile(context, path + "/bin/olsrd", R.raw.olsrd))
+            chmod(context, path + "/bin/olsrd", "0755");
+
+        if (copyFile(context, path + "/conf/olsrd.conf", R.raw.olsrd_conf_in))
+            chmod(context, path + "/conf/olsrd.conf", "0644");
+
+        if (copyFile(context, path + "/bin/olsrd_txtinfo.so.0.1",
+                R.raw.olsrd_txtinfo_so_0_1))
+            chmod(context, path + "/bin/olsrd_txtinfo.so.0.1", "0755");
+
+        if (copyFile(context, path + "/bin/olsrd_jsoninfo.so.0.0",
+                R.raw.olsrd_jsoninfo_so_0_0))
+            chmod(context, path + "/bin/olsrd_jsoninfo.so.0.0", "0755");
+
+        if (copyFile(context, path + "/bin/olsrd_nameservice.so.0.3",
+                R.raw.olsrd_nameservice_so_0_3))
+            chmod(context, path + "/bin/olsrd_nameservice.so.0.3", "0755");
     }
 
     public static InetAddress getIpAddress()
@@ -158,16 +167,40 @@ public class NativeTools
         return runCommandGetOutput("chmod " + mode + " " + path);
     }
 
-    private static String copyFile(Context context, String filename,
+    /**
+     *
+     * @param context
+     * @param filename
+     * @param resource
+     * @return true if the file was copied, false otherwise
+     */
+    private static boolean copyFile(Context context, String filename,
             int resource)
     {
         File outFile = new File(filename);
         outFile.getParentFile().mkdirs();
 
-        // if (!outFile.exists())
-        // { // don't overwrite existing files
-        Log.d(TAG, "Copying file '" + filename + "' ...");
         InputStream is = context.getResources().openRawResource(resource);
+        int inFileLength = 0;
+
+        try
+        {
+            inFileLength = is.available();
+        }
+        catch (IOException e)
+        {
+            e.printStackTrace();
+        }
+
+        Log.d(TAG, "in: " + inFileLength + " out: " + outFile.length());
+
+        // Don't overwrite existing files unless they have changed
+        if (outFile.exists() && (outFile.length() == inFileLength))
+        {
+            return false;
+        }
+
+        Log.d(TAG, "Copying file '" + filename + "' ...");
         byte buf[] = new byte[1024];
         int len;
         try
@@ -182,14 +215,12 @@ public class NativeTools
         }
         catch (IOException e)
         {
-            String error = "Couldn't install file - " + filename + "! "
-                    + e.toString();
-            Log.e(TAG, error);
-            return error;
+            Log.e(TAG,
+                    "Couldn't install file - " + filename + "! " + e.toString());
+            return false;
         }
-        // }
 
-        return null;
+        return true;
     }
 
     private static String prepareRootCommandScript(Context context,
@@ -362,8 +393,7 @@ public class NativeTools
         InputStream ins = null;
         ArrayList<String> lines = new ArrayList<String>();
         File file = new File(filename);
-        if (file.canRead() == false)
-            return lines;
+        if (file.canRead() == false) return lines;
         try
         {
             ins = new FileInputStream(file);
@@ -439,9 +469,13 @@ public class NativeTools
                 BufferedReader reader = new BufferedReader(
                         new InputStreamReader(istream));
                 String line = null;
-                while ((line = reader.readLine()) != null)
+//                while ((line = reader.readLine()) != null)
+//                {
+////                    Log.d(TAG, "OUTPUT: " + line);
+//                }
+                while (reader.readLine() != null)
                 {
-//                    Log.d(TAG, "OUTPUT: " + line);
+
                 }
             }
             catch (Exception e)

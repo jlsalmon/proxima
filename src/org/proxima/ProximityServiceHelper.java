@@ -24,34 +24,65 @@ import java.util.Collection;
 import net.commotionwireless.olsrinfo.datatypes.Neighbor;
 import android.content.Context;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.util.Log;
 
 /**
  *
  * ProximityServiceHelper
  *
+ * Simple helper class to perform basic tasks related to the ProximityService,
+ * such as enabling/disabling wifi and starting/stopping the routing protocol
+ * daemon.
  */
 public class ProximityServiceHelper
 {
+    /**
+     * The ID tag of this class for use with logging messages
+     */
     private static final String TAG = "ProximityServiceHelper";
 
+    /**
+     * Used to enable/disable wifi.
+     */
     private final WifiManager mWifiManager;
+
+    /**
+     * Helper class for olsr tasks such as starting/stopping the daemon and
+     * retrieving the current list of neighbors
+     */
     private final OlsrHelper mOlsrHelper;
 
     /**
+     * Reference to the parent context
+     */
+    private final Context mContext;
+
+    /**
+     * Keep track of whether we have already configured the wireless interface
+     * or not.
+     */
+    private boolean mInterfaceConfigured;
+
+    /**
+     * Constructor
      *
-     * @param context
+     * @param context the parent context reference
      */
     public ProximityServiceHelper(Context context)
     {
         mWifiManager = (WifiManager) context
                 .getSystemService(Context.WIFI_SERVICE);
         mOlsrHelper = new OlsrHelper(context);
+        mContext = context;
+        mInterfaceConfigured = false;
     }
 
     /**
+     * Start the routing protocol daemon (currently olsrd)
      *
-     * @return
+     * @return true if the routing protocol was successfully started, false
+     *         otherwise
      */
     public boolean startRoutingProtocol()
     {
@@ -59,8 +90,10 @@ public class ProximityServiceHelper
     }
 
     /**
+     * Stop the routing protocol
      *
-     * @return
+     * @return true if the routing protocol was successfully stopped, false
+     *         otherwise
      */
     public boolean stopRoutingProtocol()
     {
@@ -68,12 +101,24 @@ public class ProximityServiceHelper
     }
 
     /**
+     * Query the running status of the routing protocol
      *
-     * @return
+     * @return true if the routing protocol is currently running, false
+     *         otherwise
      */
-    public Collection<Neighbor> getPeers()
+    public boolean isRoutingProtocolStarted()
     {
-        return mOlsrHelper.getPeers();
+        return mOlsrHelper.isDaemonRunning();
+    }
+
+    /**
+     * Request the current list of neighbors from the routing protocol interface
+     *
+     * @return the current neighbor list
+     */
+    public Collection<Neighbor> requestNeighbors()
+    {
+        return mOlsrHelper.requestNeighbors();
     }
 
     /**
@@ -83,14 +128,14 @@ public class ProximityServiceHelper
     {
         mWifiManager.setWifiEnabled(false);
         Log.d(TAG, "Wifi disabled!");
-        // Waiting for interface-shutdown
+
+        // Wait for interface-shutdown
         try
         {
             Thread.sleep(1000);
         }
         catch (InterruptedException e)
         {
-            // nothing
         }
 
     }
@@ -100,7 +145,7 @@ public class ProximityServiceHelper
      */
     public void enableWifi()
     {
-        // Waiting for interface-restart
+        // Wait for interface-restart
         mWifiManager.setWifiEnabled(true);
         try
         {
@@ -108,9 +153,85 @@ public class ProximityServiceHelper
         }
         catch (InterruptedException e)
         {
-            // nothing
         }
-        Log.d(TAG, "Wifi started!");
+        Log.d(TAG, "Wifi enabled!");
+    }
 
+    /**
+     * Configure the wireless interface to ad-hoc mode.
+     *
+     * TODO: don't set fixed IP address TODO: use edify script for speed
+     */
+    public void configureWirelessInterface()
+    {
+        disableWifi();
+
+        String path = mContext.getFilesDir().getParent();
+
+        if (Build.MODEL.equalsIgnoreCase("GT-I9505"))
+        {
+            NativeTools.runRootCommandGetOutput(mContext, path
+                    + "/bin/tether start");
+        }
+        else
+        {
+            String iface;
+            String ip;
+
+            Log.d(TAG, Build.MODEL + " ------------------------------");
+
+            if (Build.MODEL.equalsIgnoreCase("GT-P7510"))
+            {
+                iface = "eth0";
+                ip = "192.168.2.101";
+                NativeTools.runRootCommandGetOutput(mContext, path
+                        + "/bin/wifi load");
+            }
+            else
+            {
+                iface = "wlan0";
+                ip = "192.168.2.102";
+                NativeTools.runRootCommandGetOutput(mContext, path
+                        + "/bin/wifi load");
+            }
+
+            NativeTools.runRootCommandGetOutput(mContext, path
+                    + "/bin/ifconfig " + iface + " " + ip
+                    + " netmask 255.255.255.0");
+            NativeTools.runRootCommandGetOutput(mContext, path
+                    + "/bin/ifconfig " + iface + " up");
+            NativeTools.runRootCommandGetOutput(mContext, path
+                    + "/bin/iwconfig " + iface + " mode ad-hoc");
+
+            // NativeTools.runRootCommandGetOutput(mContext,
+            // path + "/bin/ifconfig " + iface + " down");
+
+            NativeTools.runRootCommandGetOutput(mContext, path
+                    + "/bin/iwconfig " + iface + " essid AndroidTether");
+            NativeTools.runRootCommandGetOutput(mContext, path
+                    + "/bin/iwconfig " + iface + " channel 1");
+            NativeTools.runRootCommandGetOutput(mContext, path
+                    + "/bin/iwconfig " + iface + " commit");
+
+            // NativeTools.runRootCommandGetOutput(mContext,
+            // path + "/bin/ifconfig " + iface + " " + ip
+            // + " netmask 255.255.255.0");
+
+            NativeTools.runRootCommandGetOutput(mContext,
+                    "echo 1 > /proc/sys/net/ipv4/ip_forward");
+
+        }
+
+        mInterfaceConfigured = true;
+    }
+
+    /**
+     * Query the configuration state of the wireless interface.
+     *
+     * @return true if the interface is configured, false otherwise
+     */
+    public boolean isInterfaceConfigured()
+    {
+        return mInterfaceConfigured;
     }
 }

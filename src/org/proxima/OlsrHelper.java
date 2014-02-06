@@ -32,13 +32,28 @@ import android.util.Log;
  *
  * OlsrHelper
  *
+ * This class helps with operations related to the olsr routing protocol.
  */
 public class OlsrHelper
 {
+    /**
+     *
+     */
     private static final String TAG = "OlsrHelper";
 
+    /**
+     *
+     */
     private final Context mContext;
+
+    /**
+     *
+     */
     private Process mOlsrProcess;
+
+    /**
+     *
+     */
     private final JsonInfo mJsonInfo;
 
     /**
@@ -89,8 +104,9 @@ public class OlsrHelper
             iface = "eth0";
         }
 
-        String command = path + "/bin/olsrd" + " -f " + path
-                + "/conf/olsrd.conf"
+        // HACK: modify LD_LIBRARY_PATH to olsrd can find plugins
+        String command = "LD_LIBRARY_PATH=" + path + "/bin:$LD_LIBRARY_PATH; "
+                + path + "/bin/olsrd" + " -f " + path + "/conf/olsrd.conf"
                 // + "/data/data/org.span/conf/olsrd.conf"
                 + " -i " + iface + " -d 2";
 
@@ -139,7 +155,7 @@ public class OlsrHelper
      *
      * @return
      */
-    public Collection<Neighbor> getPeers()
+    public Collection<Neighbor> requestNeighbors()
     {
         OlsrDataDump dump = null;
 
